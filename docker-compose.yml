@@ -2,9 +2,9 @@ version: '3'
 
 services:
   otrs:
-    image: juanluisbaptiste/otrs:latest
+    image: juanluisbaptiste/otrs:dev
     ports:
-      - '80:80'
+      - '9001:80'
     # If running behind a proxy container, expose the ports instead
     # and link the proxy container to this one.
     #  expose:

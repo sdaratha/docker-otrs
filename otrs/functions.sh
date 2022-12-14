@@ -79,6 +79,7 @@ OTRS_DISABLE_EMAIL_FETCH="${OTRS_DISABLE_EMAIL_FETCH:-no}"
 OTRS_SET_PERMISSIONS="${OTRS_SET_PERMISSIONS:-yes}"
 OTRS_ALLOW_NOT_VERIFIED_PACKAGES="${OTRS_ALLOW_NOT_VERIFIED_PACKAGES:-no}"
 _MINOR_VERSION_UPGRADE=false
+_FIRST_INSTALL=false
 
 [ ! -z "${OTRS_SECRETS_FILE}" ] && apply_docker_secrets
 [ -z "${OTRS_INSTALL}" ] && OTRS_INSTALL="no"
@@ -87,7 +88,7 @@ _MINOR_VERSION_UPGRADE=false
 [ -z "${OTRS_DB_HOST}" ] && print_info "\e[${OTRS_ASCII_COLOR_BLUE}mDOTRS_DB_HOST\e[0m not set, setting value to \e[${OTRS_ASCII_COLOR_RED}m${DEFAULT_OTRS_DB_HOST}\e[0m" && OTRS_DB_HOST=${DEFAULT_OTRS_DB_HOST}
 [ -z "${OTRS_DB_PORT}" ] && print_info "\e[${OTRS_ASCII_COLOR_BLUE}mOTRS_DB_PORT\e[0m not set, setting value to \e[${OTRS_ASCII_COLOR_RED}m${DEFAULT_OTRS_DB_PORT}\e[0m" && OTRS_DB_PORT=${DEFAULT_OTRS_DB_PORT}
 [ -z "${SHOW_OTRS_LOGO}" ] && SHOW_OTRS_LOGO="yes"
-[ -z "${OTRS_HOSTNAME}" ] && OTRS_HOSTNAME="otrs-`random_string`" && print_info "\e[${OTRS_ASCII_COLOR_BLUE}mOTRS_HOSTNAME\e[0m not set, setting hostname to '${OTRS_HOSTNAME}'"
+[ -z "${OTRS_HOSTNAME}" ] && OTRS_HOSTNAME="`random_string`" && print_info "\e[${OTRS_ASCII_COLOR_BLUE}mOTRS_HOSTNAME\e[0m not set, setting hostname to '${OTRS_HOSTNAME}'"
 [ -z "${OTRS_DB_PASSWORD}" ] && print_info "\e[${OTRS_ASCII_COLOR_BLUE}mOTRS_DB_PASSWORD\e[0m not set, setting password to \e[${OTRS_ASCII_COLOR_RED}m${DEFAULT_OTRS_DB_PASSWORD}\e[0m" && OTRS_DB_PASSWORD=${DEFAULT_OTRS_DB_PASSWORD}
 [ -z "${OTRS_ROOT_PASSWORD}" ] && print_info "\e[${OTRS_ASCII_COLOR_BLUE}mOTRS_ROOT_PASSWORD\e[0m not set, setting password to \e[${OTRS_ASCII_COLOR_RED}m${DEFAULT_OTRS_ROOT_PASSWORD}\e[0m" && OTRS_ROOT_PASSWORD=${DEFAULT_OTRS_ROOT_PASSWORD}
 [ -z "${MYSQL_ROOT_PASSWORD}" ] && print_info "\e[${OTRS_ASCII_COLOR_BLUE}mMYSQL_ROOT_PASSWORD\e[0m not set, setting password to \e[${OTRS_ASCII_COLOR_RED}m${DEFAULT_MYSQL_ROOT_PASSWORD}\e[0m" && MYSQL_ROOT_PASSWORD=${DEFAULT_MYSQL_ROOT_PASSWORD}
@@ -270,6 +271,10 @@ function load_defaults() {
   else
     current_version=$(cat ${OTRS_ROOT}/RELEASE |grep VERSION|cut -d'=' -f2)
     current_version="${current_version## }"
+    if [ ! -e  ${current_version_file} ]; then
+      print_info "First time installation of OTRS version: \e[1;31m${current_version}\e[1;0m"
+      _FIRST_INSTALL=true
+    fi
     echo "${current_version}" > "${current_version_file}"
   fi
 
@@ -288,14 +293,14 @@ function load_defaults() {
     #Check that a backup isn't being restored
     if [ "$OTRS_INSTALL" == "no" ]; then
       print_info "Loading default db schemas..."
-      $mysqlcmd ${OTRS_DB_NAME} < ${OTRS_ROOT}scripts/database/otrs-schema.mysql.sql
-      [ $? -gt 0 ] && print_error "\n\e[1;31mERROR:\e[0m Couldn't load otrs-schema.mysql.sql schema !!\n" && exit 1
+      $mysqlcmd ${OTRS_DB_NAME} < ${OTRS_ROOT}scripts/database/schema.mysql.sql
+      [ $? -gt 0 ] && print_error "\n\e[1;31mERROR:\e[0m Couldn't load schema.mysql.sql schema !!\n" && exit 1
       print_info "Loading initial db inserts..."
-      $mysqlcmd ${OTRS_DB_NAME} < ${OTRS_ROOT}scripts/database/otrs-initial_insert.mysql.sql
+      $mysqlcmd ${OTRS_DB_NAME} < ${OTRS_ROOT}scripts/database/initial_insert.mysql.sql
       [ $? -gt 0 ] && print_error "\n\e[1;31mERROR:\e[0m Couldn't load OTRS database initial inserts !!\n" && exit 1
       print_info "Loading initial schema constraints..."
-      $mysqlcmd ${OTRS_DB_NAME} < ${OTRS_ROOT}scripts/database/otrs-schema-post.mysql.sql
-      [ $? -gt 0 ] && print_error "\n\e[1;31mERROR:\e[0m Couldn't load otrs-schema-post.mysql.sql schema !!\n" && exit 1
+      $mysqlcmd ${OTRS_DB_NAME} < ${OTRS_ROOT}scripts/database/schema-post.mysql.sql
+      [ $? -gt 0 ] && print_error "\n\e[1;31mERROR:\e[0m Couldn't load schema-post.mysql.sql schema !!\n" && exit 1
     fi
   else
     print_warning "otrs database already exists, Ok."
@@ -333,7 +338,7 @@ function set_users_skin() {
 function check_host_mount_dir() {
   #Copy the configuration from /Kernel (put there by the Dockerfile) to $OTRS_CONFIG_DIR
   #to be able to use host-mounted volumes. copy only if ${OTRS_CONFIG_DIR} doesn't exist
-  if ([ "$(ls -A ${OTRS_CONFIG_MOUNT_DIR})" ] && [ ! "$(ls -A ${OTRS_CONFIG_DIR})" ]) || [ "${OTRS_UPGRADE}" == "yes" ] || [ ${_MINOR_VERSION_UPGRADE} == true ];
+  if ([ "$(ls -A ${OTRS_CONFIG_MOUNT_DIR})" ] && [ ! "$(ls -A ${OTRS_CONFIG_DIR})" ]) || [ "${OTRS_UPGRADE}" == "yes" ] || [ ${_MINOR_VERSION_UPGRADE} == true ] || [ ${_FIRST_INSTALL} == true ];
   then
     print_info "Found empty \e[${OTRS_ASCII_COLOR_BLUE}m${OTRS_CONFIG_DIR}\e[0m, copying default configuration to it..."
     mkdir -p ${OTRS_CONFIG_DIR}
